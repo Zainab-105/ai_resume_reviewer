@@ -8,10 +8,32 @@ Estimates assume ~7 focused hours/day. Each day ends with a **demoable** state a
 
 ---
 
+## Build status
+
+Days 1–4 are complete; Day 5 is partly done. Both gates pass.
+
+| Day | Scope | State |
+|---|---|---|
+| 1 | Setup, Supabase schema + RLS, auth, app shell | Done — `325565d` |
+| 2 | Extraction gate, ATS rubric, red flags, upload + dropzone | Done — `01e7370` |
+| 3 | Gemini provider, Zod contract, keyword matching, analyze route | Done — `910f6dc` |
+| 4 | Review UI, history, responsive polish | Done — `910f6dc` |
+| 5 | Harden, deploy, document | README + gates done (`60c40a0`, `e092641`); **deploy and screenshots outstanding** |
+
+**Verification as built:**
+- `npm test` — 25 unit tests (rubric bands, red flags, keyword matching, model-output contract)
+- `npm run test:rls` — 10/10. Two real users; B blocked on read, table scan, filter by A's `user_id`, update, delete, ownership forgery, and storage listing. Run over REST, bypassing the UI.
+- `npm run test:e2e` — 32/32, including a real Gemini call: signup → upload → extraction → analysis → persisted review → rendered page → quota accounting.
+
+Sections below marked ⚠️ record where the original plan was wrong and what replaced it. They are kept rather than silently rewritten, since the reasoning is the useful part.
+
+---
+
 ## Pre-Flight (30 min, do before Day 1)
 
 - [ ] Confirm Node ≥ 20.9 (`node -v`) — Next 16 hard requirement, Node 18 is unsupported
-- [ ] Create Supabase project, copy URL + anon key + service role key
+- [ ] Create Supabase project, copy URL + publishable/anon key. (Service-role key is optional and unused — it bypasses RLS. Confirm the key and the URL come from the **same** project; a mismatch returns a confusing "Invalid API key".)
+- [ ] Turn **Confirm email OFF** in Authentication → Sign In / Providers → Email for local dev, or password sign-in fails. Turn it back on before deploying publicly.
 - [ ] Create Google AI Studio API key
 - [ ] Create `.env.local` from §8 of REQUIREMENTS.md; confirm `.env*` is gitignored
 - [ ] `git checkout -b feat/mvp`
@@ -110,7 +132,7 @@ Estimates assume ~7 focused hours/day. Each day ends with a **demoable** state a
 
 ### 3.1 Deterministic ATS scorer (1.5h) `[do before the LLM]`
 - [ ] `lib/resume/ats.ts` — implement the 8-check rubric from REQUIREMENTS.md §3.3.1 in pure TypeScript
-- [ ] Unit-test each check with fixture strings
+- [ ] Unit-test each check with fixture strings. Node 20.9+ runs TypeScript directly, so `node --test` needs no test framework — but its ESM resolver requires explicit `.ts` extensions in import specifiers (`allowImportingTsExtensions` in tsconfig).
 - [ ] This is computed in code and passed *into* the prompt as fact. The LLM comments on it; it never sets it. LLMs cannot count reliably, and a hallucinated ATS number is worse than no number.
 
 ### 3.2 Zod output schema (0.5h)
@@ -118,10 +140,11 @@ Estimates assume ~7 focused hours/day. Each day ends with a **demoable** state a
 - [ ] Every strength/weakness carries an `evidence` quote from the resume. Non-negotiable — it's what kills hallucinated feedback.
 
 ### 3.3 Provider layer (1.5h)
-- [ ] `lib/ai/provider.ts` — Gemini 2.5 Flash with JSON mode + response schema
+- [ ] `lib/ai/provider.ts` — Gemini with JSON mode + response schema.
+      ⚠️ *Corrected during the build:* `/v1beta/models` lists models a key **cannot** call. `gemini-2.5-flash` is listed but 404s with "no longer available to new users" on recently created keys. Walk a candidate list (`gemini-3.6-flash` → `gemini-3.5-flash` → `gemini-flash-latest`), fall through on 404, and persist whichever model answered. Verify with a real `generateContent` call, never with the listing.
 - [ ] `lib/ai/prompt.ts` — versioned template (`PROMPT_VERSION = 'v1'`), inputs: resume text, ATS facts, target role + seniority, optional JD
 - [ ] Retry once on invalid JSON; on second failure return a typed error, not garbage
-- [ ] `[stretch]` Claude Sonnet 5 fallback on Gemini 5xx
+- [ ] `[stretch]` Claude Sonnet 5 fallback on Gemini 5xx — **not built.** The Gemini candidate list covers the model-retirement case that actually occurred; a second vendor is only worth it for a full-provider outage. `ANTHROPIC_API_KEY` is reserved in env but unused.
 
 ### 3.4 Keyword matching (1h)
 - [ ] `lib/resume/keywords.ts` — extract JD requirements, match against resume, return `{keyword, present, location}[]` + match %
@@ -129,7 +152,8 @@ Estimates assume ~7 focused hours/day. Each day ends with a **demoable** state a
 
 ### 3.5 Analyze route (2h)
 - [ ] `app/api/analyze/route.ts`, `export const maxDuration = 60`
-- [ ] Order: auth → **quota check in Postgres** → load text → cap at 30k chars → ATS score → prompt → LLM → Zod validate → insert `reviews` + `usage_events` **in one transaction** → return id
+- [ ] Order: auth → **quota check in Postgres** → load text → cap at 30k chars → ATS score → prompt → LLM → Zod validate → insert `reviews` → insert `usage_events` → return id
+      ⚠️ *Refined during the build:* `usage_events` is written **only after a successful analysis**, not alongside the quota check. A provider outage must not burn one of the user's five daily analyses. A failed run still persists a `reviews` row with `status='failed'` plus the deterministic `ats_breakdown` and `red_flags`, so the failure appears in history instead of vanishing.
 - [ ] Persist `model`, `prompt_version`, `tokens_in/out`, `latency_ms`
 - [ ] Structured log per call
 
@@ -158,7 +182,7 @@ Estimates assume ~7 focused hours/day. Each day ends with a **demoable** state a
 - [ ] `/dashboard/reviews` — table: date, filename, overall, ATS, JD, actions
 - [ ] Delete with confirm (cascades to storage object)
 - [ ] Empty state with a CTA
-- [ ] After creating a review use **`updateTag(...)`** in the server action, not `revalidateTag`. `updateTag` gives read-your-writes so the user sees their new review immediately. If you do use `revalidateTag`, Next 16 **requires** a second cacheLife arg: `revalidateTag('reviews', 'max')` — the one-arg form is a TS error.
+- [ ] After a mutation use **`refresh()`** from `next/cache` in the server action. ⚠️ *Corrected during the build:* the original plan said `updateTag`, but `updateTag`/`revalidateTag` invalidate **cached** reads, and every read here is per-user and uncached — there is no tag to invalidate. `refresh()` re-renders the client router, which is what we actually want. (If a read is later wrapped in `cacheTag`, then `updateTag` applies — and note `revalidateTag` needs a second cacheLife arg in Next 16: `revalidateTag('reviews', 'max')`.)
 
 ### 4.3 Analysis progress UX (1h)
 - [ ] Multi-stage indicator: Uploading → Extracting → Analyzing → Done
@@ -190,9 +214,12 @@ Estimates assume ~7 focused hours/day. Each day ends with a **demoable** state a
 - [ ] `npm run build` and `npm run lint` — **zero errors**, not "just warnings"
 
 ### 5.2 Deploy (1.5h)
-- [ ] Push to GitHub; import to Vercel
-- [ ] All env vars set in Vercel (server keys unprefixed)
-- [ ] Supabase Auth redirect URLs updated to the production domain — this is the #1 first-deploy breakage
+- [x] Push to GitHub — https://github.com/Zainab-105/ai_resume_reviewer
+- [ ] Import to Vercel
+- [ ] Env vars set in Vercel: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SITE_URL` (the production domain, **not** localhost), `GOOGLE_GENERATIVE_AI_API_KEY`
+- [ ] Supabase Auth redirect URLs updated to the production domain — the #1 first-deploy breakage
+- [ ] **Re-enable "Confirm email"** in Supabase, turned off for local dev. Leaving it off in production lets anyone sign up with an address they don't own. `[gate]`
+- [ ] Decide on Google OAuth: either configure a Google OAuth client in Supabase, or hide the sign-in button. Only the email provider is currently enabled, so the button fails as-is.
 - [ ] Smoke-test the entire flow on production, in an incognito window
 - [ ] Vercel Analytics on
 
@@ -225,7 +252,7 @@ Ordered by value ÷ effort. Ship in this order.
 | 9 | Anonymous demo mode (sample resume, no signup) + public share link |
 | 10 | Interview-questions generator, cover-letter draft, readability/jargon meter |
 
-Also in Sprint 2: prompt eval harness — 10 fixture resumes with expected score ranges, run before every prompt change. Without it you will silently regress output quality the first time you "improve" the prompt.
+Also in Sprint 2: extend the eval harness. The deterministic half exists — `lib/resume/__tests__/fixtures.ts` holds resumes with expected ATS bands and required/forbidden red flags, so a rubric change that moves a fixture out of its band fails `npm test`. What's still missing is the **model** half: fixtures scored by the LLM, run before every prompt change. Without it you will silently regress output quality the first time you "improve" the prompt. `prompt_version` is already persisted on every review, so a regression can be traced to the prompt that caused it.
 
 ---
 
@@ -239,7 +266,7 @@ Pin this. Every one of these differs from pre-16 tutorials and will bite mid-spr
 | 2 | `cookies()` / `headers()` sync access removed | `const c = await cookies()` |
 | 3 | `params` / `searchParams` are Promises | `const { id } = await props.params` |
 | 4 | Hand-written page prop types | `npx next typegen` → `PageProps<'/path'>` |
-| 5 | `revalidateTag('x')` is now a TS error | `revalidateTag('x', 'max')` — or `updateTag('x')` in a Server Action |
+| 5 | `revalidateTag('x')` is now a TS error | `revalidateTag('x', 'max')`, or `updateTag('x')` for cached reads. **For uncached per-user reads — which is all of ours — use `refresh()`** |
 | 6 | Turbopack is default; webpack configs fail the build | Pick serverless-safe deps; `--webpack` is the escape hatch |
 | 7 | `proxy` with no `matcher` runs on static assets too | Always set a negative matcher |
 | 8 | `unstable_cacheLife` / `unstable_cacheTag` | Now stable — drop the prefix |

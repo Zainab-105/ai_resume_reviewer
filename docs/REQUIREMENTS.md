@@ -38,7 +38,7 @@ A web app where a job seeker uploads a resume (PDF), optionally pastes a target 
 | UI | React **19.2.4**, Tailwind CSS **v4** | v4 uses `@import "tailwindcss"` + `@theme` — no `tailwind.config.js`. |
 | Components | shadcn/ui + Radix | Add on Day 1. |
 | DB / Auth / Storage | **Supabase** (Postgres + Auth + Storage) | Row Level Security on every table. |
-| AI | **Gemini 2.5 Flash** primary, Claude Sonnet 5 fallback | Structured JSON output required. |
+| AI | **Gemini** — candidate list, `gemini-3.6-flash` first | Structured JSON output required. See §2.2 — the model list is not a reliable guide to what a key can call. |
 | PDF text | `unpdf` (serverless-safe) | Avoids `pdf-parse` Node-native issues under Turbopack. |
 | Hosting | **Vercel** | Node runtime for AI + PDF routes. |
 | Validation | **Zod** | Shared schemas: form input, AI output, API contracts. |
@@ -57,11 +57,18 @@ These are breaking vs. older Next tutorials. **All of these are load-bearing for
    ```
 3. **Run `npx next typegen`** to get `PageProps<'/route'>`, `LayoutProps`, `RouteContext` global helpers. Use them instead of hand-written prop types.
 4. **`revalidateTag` requires a second `cacheLife` argument** — `revalidateTag('reviews', 'max')`. Single-arg form is a TypeScript error.
-5. **`updateTag(tag)`** is the Server-Action-only API for read-your-writes. After creating a review, use `updateTag` (user sees it instantly), not `revalidateTag` (stale-while-revalidate).
+5. **`updateTag(tag)`** is the Server-Action-only API for read-your-writes on *cached* data.
+   **As built, we use neither.** Every read here is per-user and uncached, so there is no cache tag to invalidate — after a mutation the correct call is **`refresh()`** from `next/cache`, which re-renders the client router. Reach for `updateTag`/`revalidateTag` only if a read is later wrapped in `cacheTag`.
 6. **Route Handlers are not cached by default.** Good — our API routes are all dynamic. Don't add `force-static`.
 7. **Turbopack is the default builder.** Any dependency that injects a webpack config will fail `next build`. This is why we pick `unpdf` over `pdf-parse`.
 8. `cacheLife` / `cacheTag` are stable — drop the `unstable_` prefix.
 9. PPR is now the `cacheComponents: true` config flag; the `experimental_ppr` segment option is removed. **We leave `cacheComponents` off in v1** — the app is user-specific and dynamic.
+
+### 2.2 Gemini Model Availability
+
+`GET /v1beta/models` **lists models the key cannot actually call.** `gemini-2.5-flash` appears in the listing but returns `404 "no longer available to new users"` on keys created recently. Only a real `generateContent` call proves availability.
+
+Therefore `lib/ai/provider.ts` walks a candidate list — `gemini-3.6-flash` → `gemini-3.5-flash` → `gemini-flash-latest` — falling through on 404/permission errors, and persists whichever model actually answered. `GEMINI_MODEL` pins one explicitly. An invalid API key fails immediately rather than burning a retry.
 
 ---
 
@@ -332,41 +339,64 @@ Ranked by (user value ÷ build effort). The first three are the ones that make t
 ## 8. Environment Variables
 
 ```bash
+# Required
 NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=      # server only — never expose
+NEXT_PUBLIC_SUPABASE_ANON_KEY=  # "publishable" (sb_publishable_…) in newer dashboards
+NEXT_PUBLIC_SITE_URL=           # OAuth + email redirect base
 GOOGLE_GENERATIVE_AI_API_KEY=   # server only
-ANTHROPIC_API_KEY=              # server only, fallback provider
-NEXT_PUBLIC_SITE_URL=           # OAuth redirect base
+
+# Optional
+GEMINI_MODEL=                   # pin one model instead of the candidate list
+SUPABASE_SERVICE_ROLE_KEY=      # server only — see note below
+ANTHROPIC_API_KEY=              # server only, fallback provider (not yet wired)
 ```
 
 Rule: any key without the `NEXT_PUBLIC_` prefix must never be imported into a Client Component. Enforce by keeping all provider calls inside `lib/ai/` and importing that only from route handlers and Server Actions.
+
+**On `SUPABASE_SERVICE_ROLE_KEY`:** optional and, as built, unused. It bypasses RLS entirely, and every query in the request path runs as the signed-in user instead. Add it only if an admin task genuinely needs to read across users — a key that can't leak is better than one that's merely guarded.
+
+The publishable/anon key **is** public by design; it ships in the browser bundle. RLS is what protects the data, not key secrecy — which is why the RLS gate (§9, AC #5) is the load-bearing control.
 
 ---
 
 ## 9. Acceptance Criteria (MVP "done")
 
-1. A new user signs up with Google, uploads a 2-page PDF, and sees a complete review in under 25 seconds.
-2. The review shows an overall score, an ATS score with its rubric breakdown, ≥ 3 strengths with quotes, ≥ 3 tagged weaknesses, and ≥ 5 before/after suggestions.
-3. Pasting a job description produces a keyword table and a match percentage.
-4. Reloading the review permalink shows identical persisted data.
-5. Signing in as a second user cannot read the first user's reviews (RLS verified by a direct API attempt, not just the UI).
-6. A scanned image-only PDF is rejected with a clear message and consumes no AI quota.
-7. A 6th analysis in 24 hours is refused with a quota message.
-8. The dashboard is fully usable at 360px width.
-9. `npm run build` passes with zero TypeScript and zero ESLint errors.
-10. Deployed on Vercel with a working custom URL and a README containing screenshots.
+Status as of the current build. "Verified" means an automated check proves it, not that it looked right once.
+
+| # | Criterion | Status |
+|---|---|---|
+| 1 | A new user signs up, uploads a PDF, and sees a complete review in under 25 seconds | **Verified** — `test:e2e`, 12–14s end to end. Email/password path; Google OAuth needs a provider configured in Supabase and is untested. |
+| 2 | Review shows overall + ATS score with rubric breakdown, ≥3 quoted strengths, ≥3 tagged weaknesses, ≥5 before/after suggestions | **Verified** — `test:e2e` asserts all counts, that every strength carries evidence, and that every suggestion has both `before` and `after`. Enforced at the schema level, so a thin review cannot persist. |
+| 3 | Pasting a job description produces a keyword table and a match percentage | **Verified** — `test:e2e` |
+| 4 | Reloading the review permalink shows identical persisted data | **Verified** — `test:e2e` re-fetches the row and renders the page |
+| 5 | A second user cannot read the first user's reviews, proven by direct API attempt | **Verified** — `test:rls`, 10/10 including table scan, `user_id` filter, update, delete, ownership forgery and storage listing |
+| 6 | A scanned image-only PDF is rejected clearly and consumes no AI quota | **Verified** — `test:e2e` asserts 422 `no-text-layer` before the analyze route is reached |
+| 7 | A 6th analysis in 24 hours is refused | **Partially verified** — the RPC and the 429 path exist and single-use accounting is asserted; exhausting the full quota is not yet automated |
+| 8 | Dashboard fully usable at 360px | **Not yet verified** — built against the constraint (tables scroll in their own container), but no automated or manual check has run |
+| 9 | `npm run build` passes with zero TypeScript and zero ESLint errors | **Verified** — clean |
+| 10 | Deployed on Vercel with a working URL and a README containing screenshots | **Outstanding** — README written; deploy and screenshots pending |
 
 ---
 
 ## 10. Risk Register
 
+### Retired
+
+| Risk | Outcome |
+|---|---|
+| PDF lib breaks under Turbopack | **Did not materialise.** `unpdf` extracts text inside a Turbopack-built route handler; verified against text, image-only and non-PDF inputs before any UI was written. `--webpack` fallback unused. |
+| LLM returns malformed JSON | **Mitigated.** Structured output driven by the Zod schema, one retry that feeds the validation error back, then a typed failure. Malformed output is never persisted. |
+| Supabase RLS misconfigured | **Mitigated and proven.** Policies written before any UI; `npm run test:rls` blocks all ten cross-user attack paths over REST. |
+| Scanned/image PDFs | **Mitigated.** Rejected at <100 extracted chars with a specific message, before the analyze route is reached, so no quota is consumed. |
+
+### Live
+
 | Risk | Impact | Mitigation |
 |---|---|---|
-| PDF lib breaks under Turbopack (default in Next 16) | Blocks Day 2 | Use `unpdf` (serverless-native). Spike it in the first hour of Day 2. Fallback: `--webpack` build flag. |
-| LLM returns malformed JSON | Broken reviews | Structured output mode + Zod validate + 1 retry + typed failure state |
-| Analysis exceeds Vercel function timeout | 504s | `maxDuration = 60`; cap resume at 30k chars; stream partials |
-| Supabase RLS misconfigured | **Resume PII leak** | Write RLS policies before any UI. Test cross-user access explicitly (AC #5). |
-| API cost runaway | Bill shock | Hard server-side daily quota + input length cap + token logging from day one |
-| Scanned/image PDFs | Confusing empty reviews | Detect < 100 chars, reject early with a helpful message |
-| Scope creep from §7 | Miss 5-day target | §7 items 5+ are explicitly week-2. MVP scope is frozen at §9. |
+| Analysis exceeds Vercel function timeout | 504s | `maxDuration = 60`; resume capped at 30k chars. Observed 12–14s locally, but that is one model on one fixture — watch p95 in production. Streaming partials remains the fallback. |
+| API cost runaway | Bill shock | Server-side daily quota enforced in Postgres, input length cap, per-review token logging. Quota is charged only on success, so outages don't consume it. |
+| **Model retired without notice** | Total outage | *Not in the original plan.* Google removed `gemini-2.5-flash` for new keys while still listing it. Provider now walks a candidate list and falls through on 404. Revisit the list periodically — this will happen again. |
+| **Provider errors are opaque** | Slow diagnosis | *Not in the original plan.* The SDK throws objects whose detail is not on `.message`, so failures logged as `{}`. Errors are now serialised whole, and fatal cases (bad key, retired model, rate limit) are distinguished from transient ones. |
+| Google OAuth unconfigured | Sign-in button fails | Only the email provider is enabled. Either configure a Google OAuth client in Supabase or hide the button before launch. |
+| Email confirmation off in dev | Anyone can sign up with an address they don't own | Acceptable locally; **must be re-enabled before public deploy.** |
+| Scope creep from §7 | Miss target | §7 items 5+ are week-2. MVP scope frozen at §9. |
