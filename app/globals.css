@@ -1,26 +1,96 @@
 @import "tailwindcss";
 
+/* Tailwind v4 has no tailwind.config.js — design tokens live here. */
+
+/* Class-based dark mode so the theme toggle can override the OS preference. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.21 0.006 285.9);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.006 285.9);
+  --muted: oklch(0.967 0.001 286.4);
+  --muted-foreground: oklch(0.552 0.014 285.9);
+  --primary: oklch(0.55 0.21 264.4);
+  --primary-foreground: oklch(0.985 0 0);
+  --border: oklch(0.92 0.004 286.3);
+  --input: oklch(0.92 0.004 286.3);
+  --ring: oklch(0.55 0.21 264.4);
+
+  --success: oklch(0.62 0.17 149.2);
+  --warning: oklch(0.71 0.17 70.7);
+  --danger: oklch(0.58 0.22 27.3);
+
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: oklch(0.16 0.005 285.8);
+  --foreground: oklch(0.97 0 0);
+  --card: oklch(0.21 0.006 285.9);
+  --card-foreground: oklch(0.97 0 0);
+  --muted: oklch(0.27 0.006 286.0);
+  --muted-foreground: oklch(0.712 0.013 286.1);
+  --primary: oklch(0.66 0.19 263.5);
+  --primary-foreground: oklch(0.16 0.005 285.8);
+  --border: oklch(0.31 0.007 286.0);
+  --input: oklch(0.31 0.007 286.0);
+  --ring: oklch(0.66 0.19 263.5);
+
+  --success: oklch(0.7 0.16 149.6);
+  --warning: oklch(0.78 0.15 70.1);
+  --danger: oklch(0.66 0.2 24.6);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 0.25rem);
+  --radius-sm: calc(var(--radius) - 0.375rem);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Visible focus everywhere — WCAG 2.1 AA. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer utilities {
+  /* Wide content (tables, keyword grids) scrolls in its own container so the
+     page body never scrolls horizontally on mobile. */
+  .scroll-x {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
