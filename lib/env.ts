@@ -13,7 +13,12 @@ const publicSchema = z.object({
  * values must not reach the browser bundle.
  */
 const serverSchema = z.object({
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
+  /**
+   * Optional by design. This key bypasses RLS entirely, so nothing in the
+   * request path uses it — every query runs as the signed-in user. Only add it
+   * if an admin/maintenance task genuinely needs to read across users.
+   */
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
   GOOGLE_GENERATIVE_AI_API_KEY: z.string().min(1),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
   NEXT_PUBLIC_SITE_URL: z.string().url().optional(),

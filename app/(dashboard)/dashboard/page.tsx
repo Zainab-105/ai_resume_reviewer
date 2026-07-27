@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { FileUp } from "lucide-react";
 
+import { UploadForm } from "@/components/upload/upload-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
 
@@ -49,10 +49,7 @@ export default async function DashboardPage() {
           <CardDescription>PDF, up to 5&nbsp;MB.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-border px-6 py-12 text-center">
-            <FileUp aria-hidden className="size-6 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Upload lands here on day 2.</p>
-          </div>
+          <UploadForm quotaRemaining={remaining} />
         </CardContent>
       </Card>
 
