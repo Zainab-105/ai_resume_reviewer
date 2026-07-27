@@ -155,17 +155,11 @@ export async function POST(request: Request) {
     console.error("[analyze] usage event insert failed", { message: usageError.message });
   }
 
-  console.info("[analyze] complete", {
-    userId: user.id,
-    reviewId: inserted.id,
-    model,
-    tokensIn,
-    tokensOut,
-    latencyMs,
-    atsScore: ats.score,
-    overallScore: review.overall_score,
-    hasJobTarget: Boolean(jobTargetId),
-  });
+  // Interpolated rather than passed as an object — Next's dev logger renders a
+  // second argument as `{}`, which makes these lines useless when debugging.
+  console.info(
+    `[analyze] complete review=${inserted.id} model=${model} ats=${ats.score} overall=${review.overall_score} tokens=${tokensIn}/${tokensOut} latency=${latencyMs}ms jd=${Boolean(jobTargetId)}`,
+  );
 
   return NextResponse.json({ reviewId: inserted.id });
 }
