@@ -16,7 +16,9 @@ for (const line of fs.readFileSync(path.join(ROOT, ".env.local"), "utf8").split(
   if (m) env[m[1]] = m[2].trim();
 }
 
-const BASE = "http://localhost:3000";
+// Override to run the same suite against a deployment:
+//   E2E_BASE_URL=https://your-app.vercel.app npm run test:e2e
+const BASE = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 const SUPA = env.NEXT_PUBLIC_SUPABASE_URL;
 const KEY = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
