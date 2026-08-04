@@ -176,6 +176,31 @@ npm run dev
 
 ---
 
+## Deploying to Vercel
+
+1. Import the repository at [vercel.com/new](https://vercel.com/new).
+
+2. **Add the environment variables before the first build.** Under *Settings → Environment Variables*, tick Production, Preview and Development for each:
+
+   | Variable | Value |
+   |---|---|
+   | `NEXT_PUBLIC_SUPABASE_URL` | `https://<project-ref>.supabase.co` |
+   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | your publishable / anon key |
+   | `GOOGLE_GENERATIVE_AI_API_KEY` | your Gemini key |
+   | `NEXT_PUBLIC_SITE_URL` | your production URL — **not** `localhost:3000` |
+
+   Missing values fail the build at "Collecting page data", not at compile time — [`lib/env.ts`](lib/env.ts) validates them at module load so a misconfigured deploy fails loudly instead of 500ing at runtime. Environment variables only apply to *new* builds, so redeploy after adding them.
+
+3. **Point Supabase at the production domain.** Under *Authentication → URL Configuration*, set the Site URL to your Vercel domain and add `https://your-app.vercel.app/**` to Redirect URLs. Skipping this is the most common first-deploy breakage — auth redirects bounce to localhost.
+
+4. **Re-enable "Confirm email"** in *Authentication → Sign In / Providers → Email*, if you turned it off for local development. Leaving it off in production lets anyone sign up with an address they don't own.
+
+5. Either configure a Google OAuth client in Supabase, or remove the Google button — with only the email provider enabled it fails.
+
+6. Smoke-test the whole flow in an incognito window.
+
+---
+
 ## Testing
 
 ```bash

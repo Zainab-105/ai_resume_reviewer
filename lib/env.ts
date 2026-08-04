@@ -28,6 +28,25 @@ function format(error: z.ZodError): string {
   return error.issues.map((i) => `  - ${i.path.join(".")}: ${i.message}`).join("\n");
 }
 
+/**
+ * On a CI/host build there is no .env.local to copy — telling someone to
+ * create one is the wrong instruction. Detect the common hosts so the message
+ * points at their dashboard instead.
+ */
+function howToFix(): string {
+  if (process.env.VERCEL) {
+    return (
+      "Set these in Vercel: Project > Settings > Environment Variables " +
+      "(tick Production, Preview and Development), then redeploy — " +
+      "environment variables only apply to new builds."
+    );
+  }
+  if (process.env.CI) {
+    return "Set these as environment variables or secrets in your CI configuration.";
+  }
+  return "Copy .env.example to .env.local and fill it in.";
+}
+
 // Referenced with explicit literal keys so the Next.js bundler can inline them.
 const parsedPublic = publicSchema.safeParse({
   NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -36,8 +55,7 @@ const parsedPublic = publicSchema.safeParse({
 
 if (!parsedPublic.success) {
   throw new Error(
-    `Missing or invalid public environment variables:\n${format(parsedPublic.error)}\n` +
-      `Copy .env.example to .env.local and fill it in.`,
+    `Missing or invalid public environment variables:\n${format(parsedPublic.error)}\n\n${howToFix()}`,
   );
 }
 
@@ -61,7 +79,7 @@ export function serverEnv(): z.infer<typeof serverSchema> {
 
   if (!parsed.success) {
     throw new Error(
-      `Missing or invalid server environment variables:\n${format(parsed.error)}`,
+      `Missing or invalid server environment variables:\n${format(parsed.error)}\n\n${howToFix()}`,
     );
   }
 
