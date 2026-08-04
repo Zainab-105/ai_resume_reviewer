@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { UploadForm } from "@/components/upload/upload-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { one } from "@/lib/supabase/relations";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -75,9 +76,7 @@ export default async function DashboardPage() {
                   className="flex items-center justify-between gap-4 rounded-md border border-border px-4 py-3 text-sm hover:bg-muted"
                 >
                   <span className="truncate">
-                    {/* Supabase types the embedded relation as an array. */}
-                    {(review.resumes as unknown as { file_name: string }[] | null)?.[0]?.file_name ??
-                      "Resume"}
+                    {one<{ file_name: string }>(review.resumes)?.file_name ?? "Resume"}
                   </span>
                   <span className="shrink-0 text-muted-foreground">
                     {review.overall_score ?? "—"} overall · {review.ats_score ?? "—"} ATS

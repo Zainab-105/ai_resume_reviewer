@@ -12,6 +12,7 @@ import {
   normaliseFileName,
   type LineCandidate,
 } from "@/lib/resume/line-matching";
+import { one } from "@/lib/supabase/relations";
 import { createClient } from "@/lib/supabase/server";
 
 export const maxDuration = 30;
@@ -91,8 +92,7 @@ export async function POST(request: Request) {
     seenLines.add(row.line_id);
     candidates.push({
       lineId: row.line_id,
-      label:
-        (row.resume_lines as unknown as { label: string }[] | null)?.[0]?.label ?? row.file_name,
+      label: one<{ label: string }>(row.resume_lines)?.label ?? row.file_name,
       extractedText: row.extracted_text,
       fileName: row.file_name,
     });

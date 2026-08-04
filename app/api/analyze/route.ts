@@ -8,6 +8,7 @@ import { DAILY_ANALYSIS_QUOTA, MAX_JD_CHARS } from "@/lib/resume/constants";
 import { matchKeywords } from "@/lib/resume/keywords";
 import { scoreDelta } from "@/lib/resume/line-matching";
 import { detectRedFlags } from "@/lib/resume/red-flags";
+import { one } from "@/lib/supabase/relations";
 import { createClient } from "@/lib/supabase/server";
 
 /** Analysis is slow; Vercel's default would cut it off. */
@@ -132,8 +133,7 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (previous) {
-      const previousVersion =
-        (previous.resumes as unknown as { version: number }[] | null)?.[0]?.version ?? 1;
+      const previousVersion = one<{ version: number }>(previous.resumes)?.version ?? 1;
 
       delta = scoreDelta(
         { overall: review.overall_score, ats: ats.score },

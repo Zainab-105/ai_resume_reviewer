@@ -14,6 +14,7 @@ import type { AtsCheck } from "@/lib/resume/ats";
 import type { KeywordMatch } from "@/lib/resume/keywords";
 import type { ScoreDelta } from "@/lib/resume/line-matching";
 import type { RedFlag, RedFlagSeverity } from "@/lib/resume/red-flags";
+import { one } from "@/lib/supabase/relations";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
@@ -47,7 +48,7 @@ export default async function ReviewPage({
 
   // Every scored version of this resume line, for the progress chart. RLS
   // keeps this to the caller's own rows.
-  const lineId = (review.resumes as unknown as { line_id: string | null }[] | null)?.[0]?.line_id;
+  const lineId = one<{ line_id: string | null }>(review.resumes)?.line_id;
 
   const { data: lineReviews } = lineId
     ? await supabase
@@ -60,13 +61,13 @@ export default async function ReviewPage({
 
   const timeline: TimelineEntry[] = (lineReviews ?? []).map((entry) => ({
     reviewId: entry.id,
-    version: (entry.resumes as unknown as { version: number | null }[] | null)?.[0]?.version ?? 1,
+    version: one<{ version: number | null }>(entry.resumes)?.version ?? 1,
     overall: entry.overall_score,
     ats: entry.ats_score,
     createdAt: entry.created_at,
   }));
 
-  const resume = (review.resumes as unknown as { file_name: string; version: number | null }[] | null)?.[0];
+  const resume = one<{ file_name: string; version: number | null }>(review.resumes);
   const delta = review.score_delta as ScoreDelta | null;
 
   if (review.status === "failed") {

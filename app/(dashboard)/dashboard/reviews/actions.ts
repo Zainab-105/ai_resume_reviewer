@@ -2,6 +2,7 @@
 
 import { refresh } from "next/cache";
 
+import { one } from "@/lib/supabase/relations";
 import { createClient } from "@/lib/supabase/server";
 
 export async function deleteReview(formData: FormData) {
@@ -24,8 +25,7 @@ export async function deleteReview(formData: FormData) {
 
   await supabase.from("reviews").delete().eq("id", id).eq("user_id", user.id);
 
-  const storagePath = (review?.resumes as unknown as { storage_path: string }[] | null)?.[0]
-    ?.storage_path;
+  const storagePath = one<{ storage_path: string }>(review?.resumes)?.storage_path;
 
   if (storagePath) {
     // Only remove the file if no other review still points at that resume.

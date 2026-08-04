@@ -6,6 +6,7 @@ import { deleteReview } from "@/app/(dashboard)/dashboard/reviews/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription } from "@/components/ui/card";
 import type { ScoreDelta } from "@/lib/resume/line-matching";
+import { one } from "@/lib/supabase/relations";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
@@ -78,12 +79,9 @@ export default async function ReviewsPage() {
           </thead>
           <tbody>
             {reviews.map((review) => {
-              const resume = (
-                review.resumes as unknown as { file_name: string; version: number | null }[] | null
-              )?.[0];
+              const resume = one<{ file_name: string; version: number | null }>(review.resumes);
               const fileName = resume?.file_name ?? "Resume";
-              const target =
-                (review.job_targets as unknown as { title: string | null }[] | null)?.[0]?.title;
+              const target = one<{ title: string | null }>(review.job_targets)?.title;
               const delta = review.score_delta as ScoreDelta | null;
 
               return (
