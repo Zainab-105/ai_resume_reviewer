@@ -4,8 +4,7 @@ Upload a resume, optionally paste the job you're targeting, and get an ATS score
 
 Built with Next.js 16, Supabase and Gemini.
 
-<!-- TODO: screenshot — dashboard with upload + job description
-![Dashboard](docs/screenshots/dashboard.png) -->
+![The review page: score gauges, version delta, ATS breakdown, keyword match and before/after rewrites](docs/screenshots/03-review.png)
 
 ---
 
@@ -38,6 +37,19 @@ That example is real output. The rewrite folded in `Docker` and `Terraform` beca
 - **Review history** — every analysis is stored, permalinked and deletable
 - **Daily quota** — 5 analyses per user, enforced in Postgres
 - **Light and dark themes**, responsive to 360px, keyboard accessible
+
+---
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Landing page](docs/screenshots/01-landing.png) **Landing** | ![Dashboard with upload and job description](docs/screenshots/02-dashboard.png) **Upload** |
+| ![Review history with version tags and score deltas](docs/screenshots/04-history.png) **History** — version tags and score movement | ![The review page in dark mode](docs/screenshots/05-review-dark.png) **Dark mode** |
+
+<img src="docs/screenshots/06-mobile.png" alt="The review page at 360px width" width="300">
+
+Fully usable at 360px — wide tables scroll inside their own container, so the page body never scrolls sideways.
 
 ---
 

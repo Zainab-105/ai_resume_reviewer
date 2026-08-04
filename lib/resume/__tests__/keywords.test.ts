@@ -66,6 +66,34 @@ test("match percentage is bounded and an empty posting does not divide by zero",
   assert.ok(matchPercent >= 0 && matchPercent <= 100, `got ${matchPercent}`);
 });
 
+test("grammar words are never extracted as required keywords", () => {
+  // Regression: every non-stopword token used to become a keyword, so users
+  // were told their resume was missing "or", "as", "similar" and "in".
+  const { hits } = matchKeywords(resume, jd);
+  const extracted = new Set(hits.map((h) => h.keyword));
+
+  for (const word of ["as", "or", "in", "similar", "code", "databases", "experience"]) {
+    assert.ok(!extracted.has(word), `"${word}" is grammar, not a skill`);
+  }
+});
+
+test("real technologies are still extracted", () => {
+  const { hits } = matchKeywords(resume, jd);
+  const extracted = new Set(hits.map((h) => h.keyword));
+
+  for (const tech of ["typescript", "kubernetes", "docker", "terraform"]) {
+    assert.ok(extracted.has(tech), `expected "${tech}", got [${[...extracted].join(", ")}]`);
+  }
+});
+
+test("lowercase technologies with a technical shape survive", () => {
+  const { hits } = matchKeywords("I use k8s and node.js daily.", "Requirements:\n- node.js\n- c++");
+  const extracted = new Set(hits.map((h) => h.keyword));
+
+  assert.ok(extracted.has("node.js"), `got [${[...extracted].join(", ")}]`);
+  assert.ok(extracted.has("c++"), `got [${[...extracted].join(", ")}]`);
+});
+
 test("a fully matching resume scores 100%", () => {
   const { matchPercent } = matchKeywords(
     "TypeScript Kubernetes Postgres Terraform",

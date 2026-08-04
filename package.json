@@ -10,7 +10,9 @@
     "test": "node --test \"lib/**/*.test.ts\"",
     "test:rls": "node scripts/rls-gate.mjs",
     "test:e2e": "node scripts/e2e.mjs",
-    "fixtures": "node scripts/fixtures/make-pdf.mjs"
+    "fixtures": "node scripts/fixtures/make-pdf.mjs",
+    "seed:demo": "node scripts/seed-demo.mjs > scripts/.demo.json",
+    "screenshots": "node scripts/screenshots.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.13.0",

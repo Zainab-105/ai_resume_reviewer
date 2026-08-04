@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { reviewOutputSchema, toGeminiSchema } from "../schema.ts";
+import { isRealRewrite, reviewOutputSchema, toGeminiSchema } from "../schema.ts";
 
 const valid = {
   overall_score: 78,
@@ -53,6 +53,35 @@ test("an invalid severity value is rejected", () => {
     weaknesses: [{ text: "Something is wrong here.", severity: "catastrophic", evidence: "x y z" }],
   };
   assert.equal(reviewOutputSchema.safeParse(bad).success, false);
+});
+
+test("a rewrite identical to the original is rejected", () => {
+  assert.equal(
+    isRealRewrite({ before: "Managed the team", after: "Managed the team" }),
+    false,
+  );
+});
+
+test("a rewrite differing only in dash style or spacing is rejected", () => {
+  // Observed in production: "Mar 2018 - Dec 2020" -> "Mar 2018 – Dec 2020".
+  assert.equal(
+    isRealRewrite({ before: "Mar 2018 - Dec 2020", after: "Mar 2018 – Dec 2020" }),
+    false,
+  );
+  assert.equal(
+    isRealRewrite({ before: "Led  the team.", after: "Led the team" }),
+    false,
+  );
+});
+
+test("a genuine rewrite is kept", () => {
+  assert.equal(
+    isRealRewrite({
+      before: "Managed the team",
+      after: "Led 6 engineers, cutting deploy time 40%",
+    }),
+    true,
+  );
 });
 
 test("Gemini schema strips keywords the API rejects", () => {

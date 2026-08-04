@@ -36,6 +36,25 @@ export const suggestionSchema = z.object({
   why: z.string().min(10).max(300).describe("What the rewrite fixes."),
 });
 
+/**
+ * Models occasionally return a "rewrite" identical to the original except for
+ * whitespace or dash style — e.g. "Mar 2018 - Dec 2020" -> "Mar 2018 – Dec 2020".
+ * That wastes a suggestion slot and reads as broken.
+ *
+ * Dropped before validation rather than rejected by the schema, so one dud
+ * does not throw away an otherwise good review.
+ */
+export function isRealRewrite(suggestion: { before: string; after: string }): boolean {
+  const normalise = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/[‐-―]/g, "-") // en/em dashes and friends
+      .replace(/[\s,.;:]+/g, " ")
+      .trim();
+
+  return normalise(suggestion.before) !== normalise(suggestion.after);
+}
+
 export const subScoresSchema = z.object({
   impact: z.number().int().min(0).max(100),
   clarity: z.number().int().min(0).max(100),

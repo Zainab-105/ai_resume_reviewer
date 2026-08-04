@@ -125,12 +125,30 @@ function extractTerms(region: string): Set<string> {
     if (text.includes(phrase)) terms.add(phrase);
   }
 
+  // Tokens that appear capitalised or all-caps mid-sentence in the original
+  // posting are almost always proper nouns — product and technology names.
+  // This is the main signal separating "Kubernetes" from "similar".
+  const properNouns = new Set(
+    (withoutHeadings.match(/(?<![.!?]\s)(?<!^)\b[A-Z][A-Za-z0-9+.#-]{1,}\b/gm) ?? []).map((w) =>
+      w.toLowerCase(),
+    ),
+  );
+
   for (const raw of text.split(/[\s,;:()[\]]+/)) {
     const token = raw.replace(/^[-.]+|[-.]+$/g, "");
     if (token.length < 2 || token.length > 30) continue;
     if (STOPWORDS.has(token) || SECTION_WORDS.has(token)) continue;
     if (/^\d+$/.test(token)) continue;
-    // Keep tokens that look technical or capitalised in the original text.
+
+    // A term must look technical to count. Without this every English word in
+    // the posting became a "required keyword" — users were told to add "or"
+    // and "similar" to their resume, and the match percentage was meaningless.
+    const isKnownTech = token in ALIASES;
+    const hasTechShape = /[+.#]|^[a-z]+\d|\d[a-z]+$/.test(token); // c++, node.js, k8s, s3
+    const isProperNoun = properNouns.has(token);
+
+    if (!isKnownTech && !hasTechShape && !isProperNoun) continue;
+
     terms.add(token);
   }
 

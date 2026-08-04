@@ -6,6 +6,7 @@ import {
   type PromptInput,
 } from "@/lib/ai/prompt";
 import {
+  isRealRewrite,
   reviewOutputSchema,
   toGeminiSchema,
   type ReviewOutput,
@@ -179,6 +180,20 @@ export async function generateReview(
           `[ai] ${model} JSON parse failed (attempt ${attempt}): ${raw.slice(0, 200)}`,
         );
         continue;
+      }
+
+      // Drop no-op rewrites before validating, so one dud suggestion does not
+      // cost an otherwise good review. The schema's minimum count still applies
+      // afterwards, so a response that is mostly no-ops is retried.
+      if (parsed && typeof parsed === "object" && Array.isArray((parsed as ReviewOutput).suggestions)) {
+        const candidate = parsed as ReviewOutput;
+        const kept = candidate.suggestions.filter(isRealRewrite);
+        if (kept.length !== candidate.suggestions.length) {
+          console.warn(
+            `[ai] dropped ${candidate.suggestions.length - kept.length} no-op rewrite(s)`,
+          );
+          candidate.suggestions = kept;
+        }
       }
 
       const validated = reviewOutputSchema.safeParse(parsed);
