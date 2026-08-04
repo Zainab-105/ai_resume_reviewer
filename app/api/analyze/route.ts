@@ -6,6 +6,7 @@ import { generateReview } from "@/lib/ai/provider";
 import { scoreAts } from "@/lib/resume/ats";
 import { DAILY_ANALYSIS_QUOTA, MAX_JD_CHARS } from "@/lib/resume/constants";
 import { matchKeywords } from "@/lib/resume/keywords";
+import { scoreDelta } from "@/lib/resume/line-matching";
 import { detectRedFlags } from "@/lib/resume/red-flags";
 import { createClient } from "@/lib/supabase/server";
 
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
   // RLS also scopes this, but filtering by user_id makes the intent explicit.
   const { data: resume, error: resumeError } = await supabase
     .from("resumes")
-    .select("id, file_name, page_count, extracted_text")
+    .select("id, file_name, page_count, extracted_text, line_id, version")
     .eq("id", resumeId)
     .eq("user_id", user.id)
     .single();
@@ -113,6 +114,39 @@ export async function POST(request: Request) {
 
   const { review, model, tokensIn, tokensOut, latencyMs } = result;
 
+  // Compare against the previous version of this same resume line, if any.
+  // Persisted on the row rather than computed on read, so the delta reflects
+  // what the previous version actually scored even if it is later deleted.
+  let delta = null;
+
+  if (resume.line_id && (resume.version ?? 1) > 1) {
+    const { data: previous } = await supabase
+      .from("reviews")
+      .select("id, overall_score, ats_score, resumes!inner(version, line_id)")
+      .eq("user_id", user.id)
+      .eq("status", "complete")
+      .eq("resumes.line_id", resume.line_id)
+      .lt("resumes.version", resume.version ?? 1)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (previous) {
+      const previousVersion =
+        (previous.resumes as unknown as { version: number }[] | null)?.[0]?.version ?? 1;
+
+      delta = scoreDelta(
+        { overall: review.overall_score, ats: ats.score },
+        {
+          overall: previous.overall_score,
+          ats: previous.ats_score,
+          version: previousVersion,
+          reviewId: previous.id,
+        },
+      );
+    }
+  }
+
   const { data: inserted, error: insertError } = await supabase
     .from("reviews")
     .insert({
@@ -136,6 +170,7 @@ export async function POST(request: Request) {
       tokens_in: tokensIn,
       tokens_out: tokensOut,
       latency_ms: latencyMs,
+      score_delta: delta,
     })
     .select("id")
     .single();

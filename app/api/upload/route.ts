@@ -7,6 +7,11 @@ import {
   formatBytes,
 } from "@/lib/resume/constants";
 import { extractResumeText } from "@/lib/resume/extract";
+import {
+  matchLine,
+  normaliseFileName,
+  type LineCandidate,
+} from "@/lib/resume/line-matching";
 import { createClient } from "@/lib/supabase/server";
 
 export const maxDuration = 30;
@@ -64,6 +69,60 @@ export async function POST(request: Request) {
   const resumeId = crypto.randomUUID();
   const storagePath = `${user.id}/${resumeId}.pdf`;
 
+  // Decide whether this continues an existing resume line before writing
+  // anything, so the row lands with its line and version already set.
+  //
+  // Only the latest version of each line is compared — a resume drifts as it
+  // is edited, and comparing against v1 forever would eventually split a line
+  // that has legitimately evolved.
+  const { data: latestVersions } = await supabase
+    .from("resumes")
+    .select("line_id, file_name, extracted_text, version, resume_lines(label)")
+    .eq("user_id", user.id)
+    .not("line_id", "is", null)
+    .order("version", { ascending: false })
+    .limit(60);
+
+  const seenLines = new Set<string>();
+  const candidates: LineCandidate[] = [];
+
+  for (const row of latestVersions ?? []) {
+    if (!row.line_id || seenLines.has(row.line_id) || !row.extracted_text) continue;
+    seenLines.add(row.line_id);
+    candidates.push({
+      lineId: row.line_id,
+      label:
+        (row.resume_lines as unknown as { label: string }[] | null)?.[0]?.label ?? row.file_name,
+      extractedText: row.extracted_text,
+      fileName: row.file_name,
+    });
+  }
+
+  const matched = matchLine(extraction.text, fileName, candidates);
+
+  let lineId = matched?.lineId ?? null;
+  let version = 1;
+
+  if (lineId) {
+    const { data: nextVersion } = await supabase.rpc("next_resume_version", {
+      p_line_id: lineId,
+    });
+    version = typeof nextVersion === "number" ? nextVersion : 1;
+  } else {
+    const { data: newLine, error: lineError } = await supabase
+      .from("resume_lines")
+      .insert({ user_id: user.id, label: normaliseFileName(fileName) || fileName })
+      .select("id")
+      .single();
+
+    // A failed line insert must not lose the upload — it just stays unchained.
+    if (lineError) {
+      console.error(`[upload] resume_lines insert failed: ${lineError.message}`);
+    } else {
+      lineId = newLine.id;
+    }
+  }
+
   const { error: uploadError } = await supabase.storage
     .from("resumes")
     .upload(storagePath, buffer, { contentType: ACCEPTED_MIME, upsert: false });
@@ -84,6 +143,8 @@ export async function POST(request: Request) {
       page_count: extraction.pageCount,
       word_count: extraction.wordCount,
       extracted_text: extraction.text,
+      line_id: lineId,
+      version,
     })
     .select("id, file_name, page_count, word_count")
     .single();
@@ -125,5 +186,9 @@ export async function POST(request: Request) {
     wordCount: resume.word_count,
     truncated: extraction.truncated,
     jobTargetId,
+    lineId,
+    version,
+    // Lets the client say "version 2 of Jane-Doe-Resume" before analysis runs.
+    continuesLine: matched ? { label: matched.label, similarity: matched.similarity } : null,
   });
 }

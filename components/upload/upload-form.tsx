@@ -30,6 +30,7 @@ export function UploadForm({ quotaRemaining }: { quotaRemaining: number }) {
   const [jobTitle, setJobTitle] = useState("");
   const [stage, setStage] = useState<Stage>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [continues, setContinues] = useState<{ label: string; version: number } | null>(null);
 
   const busy = stage !== "idle" && stage !== "done";
   const outOfQuota = quotaRemaining <= 0;
@@ -38,6 +39,7 @@ export function UploadForm({ quotaRemaining }: { quotaRemaining: number }) {
     if (!file || busy) return;
 
     setError(null);
+    setContinues(null);
     setStage("uploading");
 
     try {
@@ -55,6 +57,10 @@ export function UploadForm({ quotaRemaining }: { quotaRemaining: number }) {
         setError(uploaded.error ?? "Upload failed. Try again.");
         setStage("idle");
         return;
+      }
+
+      if (uploaded.continuesLine) {
+        setContinues({ label: uploaded.continuesLine.label, version: uploaded.version });
       }
 
       setStage("analyzing");
@@ -142,6 +148,12 @@ export function UploadForm({ quotaRemaining }: { quotaRemaining: number }) {
       {busy || stage === "done" ? (
         <div aria-live="polite" className="flex flex-col gap-2">
           <p className="text-sm font-medium">{STAGE_LABEL[stage]}</p>
+          {continues ? (
+            <p className="text-sm text-muted-foreground">
+              Recognised as version {continues.version} of “{continues.label}” — you&apos;ll see
+              what changed since last time.
+            </p>
+          ) : null}
           <ol className="flex gap-1.5">
             {STAGE_ORDER.map((s) => {
               const reached = STAGE_ORDER.indexOf(stage) >= STAGE_ORDER.indexOf(s);

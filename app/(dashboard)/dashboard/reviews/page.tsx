@@ -5,16 +5,36 @@ import { Trash2 } from "lucide-react";
 import { deleteReview } from "@/app/(dashboard)/dashboard/reviews/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription } from "@/components/ui/card";
+import type { ScoreDelta } from "@/lib/resume/line-matching";
 import { createClient } from "@/lib/supabase/server";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Review history" };
+
+/** Change against the previous version of the same resume, or nothing. */
+function DeltaTag({ value }: { value: number | null }) {
+  if (value === null || value === 0) return null;
+
+  const improved = value > 0;
+  return (
+    <span
+      className={cn("ml-1.5 text-xs font-medium", improved ? "text-success" : "text-danger")}
+    >
+      <span className="sr-only">{improved ? " up by " : " down by "}</span>
+      <span aria-hidden>{improved ? "▲" : "▼"}</span>
+      {Math.abs(value)}
+    </span>
+  );
+}
 
 export default async function ReviewsPage() {
   const supabase = await createClient();
 
   const { data: reviews } = await supabase
     .from("reviews")
-    .select("id, created_at, overall_score, ats_score, status, resumes(file_name), job_targets(title)")
+    .select(
+      "id, created_at, overall_score, ats_score, status, score_delta, resumes(file_name, version), job_targets(title)",
+    )
     .order("created_at", { ascending: false });
 
   if (!reviews?.length) {
@@ -58,11 +78,13 @@ export default async function ReviewsPage() {
           </thead>
           <tbody>
             {reviews.map((review) => {
-              const fileName =
-                (review.resumes as unknown as { file_name: string }[] | null)?.[0]?.file_name ??
-                "Resume";
+              const resume = (
+                review.resumes as unknown as { file_name: string; version: number | null }[] | null
+              )?.[0];
+              const fileName = resume?.file_name ?? "Resume";
               const target =
                 (review.job_targets as unknown as { title: string | null }[] | null)?.[0]?.title;
+              const delta = review.score_delta as ScoreDelta | null;
 
               return (
                 <tr key={review.id} className="border-b border-border/50 last:border-0">
@@ -73,6 +95,9 @@ export default async function ReviewsPage() {
                     >
                       {fileName}
                     </Link>
+                    {resume?.version && resume.version > 1 ? (
+                      <span className="ml-2 text-xs text-muted-foreground">v{resume.version}</span>
+                    ) : null}
                     {review.status === "failed" ? (
                       <span className="ml-2 rounded-full bg-danger/15 px-2 py-0.5 text-xs text-danger">
                         Failed
@@ -83,8 +108,14 @@ export default async function ReviewsPage() {
                   <td className="p-3 text-muted-foreground">
                     {new Date(review.created_at).toLocaleDateString()}
                   </td>
-                  <td className="p-3 text-right tabular-nums">{review.overall_score ?? "—"}</td>
-                  <td className="p-3 text-right tabular-nums">{review.ats_score ?? "—"}</td>
+                  <td className="p-3 text-right tabular-nums">
+                    {review.overall_score ?? "—"}
+                    <DeltaTag value={delta?.overall ?? null} />
+                  </td>
+                  <td className="p-3 text-right tabular-nums">
+                    {review.ats_score ?? "—"}
+                    <DeltaTag value={delta?.ats ?? null} />
+                  </td>
                   <td className="p-3 text-right">
                     <form action={deleteReview}>
                       <input type="hidden" name="id" value={review.id} />

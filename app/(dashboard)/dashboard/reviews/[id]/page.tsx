@@ -3,13 +3,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AlertTriangle, Check, CircleAlert, Minus, X } from "lucide-react";
 
+import { ScoreDeltaBanner } from "@/components/review/score-delta";
 import { ScoreBar, ScoreGauge } from "@/components/review/score-gauge";
+import { VersionTimeline, type TimelineEntry } from "@/components/review/version-timeline";
 import { SuggestionCard } from "@/components/review/suggestion-card";
 import { Alert } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Strength, Suggestion, SubScores, Weakness } from "@/lib/ai/schema";
 import type { AtsCheck } from "@/lib/resume/ats";
 import type { KeywordMatch } from "@/lib/resume/keywords";
+import type { ScoreDelta } from "@/lib/resume/line-matching";
 import type { RedFlag, RedFlagSeverity } from "@/lib/resume/red-flags";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
@@ -35,14 +38,36 @@ export default async function ReviewPage({
   const { data: review } = await supabase
     .from("reviews")
     .select(
-      "id, status, created_at, overall_score, ats_score, sub_scores, ats_breakdown, strengths, weaknesses, suggestions, red_flags, keyword_match, error_message, resumes(file_name, page_count, word_count)",
+      "id, status, created_at, overall_score, ats_score, sub_scores, ats_breakdown, strengths, weaknesses, suggestions, red_flags, keyword_match, score_delta, error_message, resumes(file_name, page_count, word_count, version, line_id)",
     )
     .eq("id", id)
     .single();
 
   if (!review) notFound();
 
-  const resume = (review.resumes as unknown as { file_name: string }[] | null)?.[0];
+  // Every scored version of this resume line, for the progress chart. RLS
+  // keeps this to the caller's own rows.
+  const lineId = (review.resumes as unknown as { line_id: string | null }[] | null)?.[0]?.line_id;
+
+  const { data: lineReviews } = lineId
+    ? await supabase
+        .from("reviews")
+        .select("id, created_at, overall_score, ats_score, resumes!inner(version, line_id)")
+        .eq("status", "complete")
+        .eq("resumes.line_id", lineId)
+        .order("created_at", { ascending: true })
+    : { data: null };
+
+  const timeline: TimelineEntry[] = (lineReviews ?? []).map((entry) => ({
+    reviewId: entry.id,
+    version: (entry.resumes as unknown as { version: number | null }[] | null)?.[0]?.version ?? 1,
+    overall: entry.overall_score,
+    ats: entry.ats_score,
+    createdAt: entry.created_at,
+  }));
+
+  const resume = (review.resumes as unknown as { file_name: string; version: number | null }[] | null)?.[0];
+  const delta = review.score_delta as ScoreDelta | null;
 
   if (review.status === "failed") {
     return (
@@ -72,6 +97,7 @@ export default async function ReviewPage({
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{resume?.file_name ?? "Resume"}</h1>
           <p className="text-sm text-muted-foreground">
+            {resume?.version && resume.version > 1 ? `Version ${resume.version} · ` : null}
             Reviewed {new Date(review.created_at).toLocaleDateString()}
           </p>
         </div>
@@ -82,6 +108,8 @@ export default async function ReviewPage({
           All reviews
         </Link>
       </div>
+
+      {delta ? <ScoreDeltaBanner delta={delta} version={resume?.version ?? null} /> : null}
 
       <Card>
         <CardContent className="flex flex-col gap-8 p-6 sm:flex-row sm:items-center">
@@ -101,6 +129,8 @@ export default async function ReviewPage({
           ) : null}
         </CardContent>
       </Card>
+
+      <VersionTimeline entries={timeline} currentReviewId={review.id} />
 
       <AtsBreakdown checks={(review.ats_breakdown ?? []) as AtsCheck[]} score={review.ats_score} />
 
