@@ -34,6 +34,8 @@ That example is real output. The rewrite folded in `Docker` and `Terraform` beca
 - **Sub-scores** — impact, clarity, formatting, skills coverage, relevance
 - **Rule-based red flags** — employment gaps, missing dates, pronoun mixing, buzzwords, unprofessional emails, draft filenames. Costs no tokens and can't hallucinate.
 - **Scanned-PDF detection** — image-only PDFs are rejected before any AI call, so they don't burn quota
+- **Version tracking** — a re-upload is recognised as the next version of the same resume, with the score movement since last time
+- **Compare any two reviews** — which weaknesses you fixed, which appeared, which are still there, and how the keyword match moved
 - **Review history** — every analysis is stored, permalinked and deletable
 - **Daily quota** — 5 analyses per user, enforced in Postgres
 - **Light and dark themes**, responsive to 360px, keyboard accessible
@@ -45,7 +47,8 @@ That example is real output. The rewrite folded in `Docker` and `Terraform` beca
 | | |
 |---|---|
 | ![Landing page](docs/screenshots/01-landing.png) **Landing** | ![Dashboard with upload and job description](docs/screenshots/02-dashboard.png) **Upload** |
-| ![Review history with version tags and score deltas](docs/screenshots/04-history.png) **History** — version tags and score movement | ![The review page in dark mode](docs/screenshots/05-review-dark.png) **Dark mode** |
+| ![Review history with version tags and score deltas](docs/screenshots/04-history.png) **History** — version tags and score movement | ![Comparing two reviews](docs/screenshots/07-compare.png) **Compare** — fixed, new, and still-unresolved |
+| ![The review page in dark mode](docs/screenshots/05-review-dark.png) **Dark mode** | |
 
 <img src="docs/screenshots/06-mobile.png" alt="The review page at 360px width" width="300">
 
@@ -264,8 +267,8 @@ One more, learned the hard way: **`/v1beta/models` lists Gemini models your key 
 
 ## Roadmap
 
-- [ ] Score delta on re-upload — "ATS 61 → 78 since your last version"
-- [ ] Compare two reviews side by side
+- [x] Score delta on re-upload — "ATS 61 → 78 since your last version"
+- [x] Compare two reviews side by side
 - [ ] Export the report as a PDF
 - [ ] Anonymous demo mode, no signup required
 - [ ] Shareable read-only report links

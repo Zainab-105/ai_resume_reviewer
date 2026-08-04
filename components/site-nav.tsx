@@ -28,6 +28,12 @@ export async function SiteNav() {
               >
                 History
               </Link>
+              <Link
+                href="/dashboard/compare"
+                className="hidden h-8 items-center rounded-md px-3 text-sm font-medium hover:bg-muted sm:inline-flex"
+              >
+                Compare
+              </Link>
               <form action={signOut}>
                 <Button type="submit" variant="outline" size="sm">
                   Sign out

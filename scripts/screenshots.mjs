@@ -159,6 +159,9 @@ await shoot("03-review", { full: true });
 await navigate(`${BASE}/dashboard/reviews`);
 await shoot("04-history");
 
+await navigate(`${BASE}/dashboard/compare?a=${demo.review1}&b=${demo.review2}`);
+await shoot("07-compare", { full: true });
+
 // Dark mode, to show the theme actually works.
 await setTheme("dark");
 await navigate(`${BASE}/dashboard/reviews/${demo.review2}`);

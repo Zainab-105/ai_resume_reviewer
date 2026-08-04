@@ -61,7 +61,17 @@ export default async function ReviewsPage() {
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-10">
-      <h1 className="mb-6 text-2xl font-semibold tracking-tight">Review history</h1>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold tracking-tight">Review history</h1>
+        {reviews.filter((r) => r.status === "complete").length >= 2 ? (
+          <Link
+            href="/dashboard/compare"
+            className="inline-flex h-9 items-center rounded-md border border-border px-3 text-sm font-medium hover:bg-muted"
+          >
+            Compare two reviews
+          </Link>
+        ) : null}
+      </div>
 
       <div className="scroll-x rounded-lg border border-border">
         <table className="w-full min-w-[620px] text-sm">
