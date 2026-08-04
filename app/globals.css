@@ -94,3 +94,95 @@
     -webkit-overflow-scrolling: touch;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Print / Save-as-PDF
+   The review page doubles as the printable report, so what you see is what you
+   get. Screen chrome is dropped and the layout is forced back to light ink on
+   white paper regardless of the viewer's theme.
+   --------------------------------------------------------------------------- */
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm 12mm;
+  }
+
+  /* Dark mode would waste a cartridge and read badly on paper. */
+  :root,
+  .dark {
+    --background: #ffffff;
+    --foreground: #18181b;
+    --card: #ffffff;
+    --card-foreground: #18181b;
+    --muted: #f4f4f5;
+    --muted-foreground: #52525b;
+    --border: #d4d4d8;
+    --primary: #1d4ed8;
+    --success: #15803d;
+    --warning: #a16207;
+    --danger: #b91c1c;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    font-size: 10.5pt;
+  }
+
+  /* Site navigation, skip link and any control marked print:hidden. */
+  header,
+  nav,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+
+  /* Cards become plain sections — borders and shadows waste ink and space. */
+  [class*="rounded-lg"],
+  [class*="rounded-md"] {
+    box-shadow: none !important;
+  }
+
+  /* Never split a finding, a suggestion or a table row across a page. */
+  li,
+  blockquote,
+  tr,
+  figure {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  h1,
+  h2,
+  h3 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* Scroll containers must lay flat on paper — a clipped table loses data. */
+  .scroll-x {
+    overflow: visible !important;
+  }
+
+  table {
+    width: 100% !important;
+    min-width: 0 !important;
+    border-collapse: collapse;
+  }
+
+  /* Show link targets, since a printed underline is not clickable. */
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.85em;
+    color: #52525b;
+    word-break: break-all;
+  }
+
+  /* Internal app links are noise on paper. */
+  a[href^="/"]::after {
+    content: "";
+  }
+}

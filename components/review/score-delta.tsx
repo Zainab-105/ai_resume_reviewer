@@ -62,7 +62,7 @@ export function ScoreDeltaBanner({
 
       <Link
         href={`/dashboard/reviews/${delta.previousReviewId}`}
-        className="text-sm underline underline-offset-4 hover:text-foreground"
+        className="text-sm underline underline-offset-4 hover:text-foreground print:hidden"
       >
         See the previous version
       </Link>

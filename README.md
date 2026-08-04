@@ -36,6 +36,7 @@ That example is real output. The rewrite folded in `Docker` and `Terraform` beca
 - **Scanned-PDF detection** — image-only PDFs are rejected before any AI call, so they don't burn quota
 - **Version tracking** — a re-upload is recognised as the next version of the same resume, with the score movement since last time
 - **Compare any two reviews** — which weaknesses you fixed, which appeared, which are still there, and how the keyword match moved
+- **Export** — save the report as a PDF, or copy/download it as Markdown
 - **Review history** — every analysis is stored, permalinked and deletable
 - **Daily quota** — 5 analyses per user, enforced in Postgres
 - **Light and dark themes**, responsive to 360px, keyboard accessible
@@ -269,7 +270,7 @@ One more, learned the hard way: **`/v1beta/models` lists Gemini models your key 
 
 - [x] Score delta on re-upload — "ATS 61 → 78 since your last version"
 - [x] Compare two reviews side by side
-- [ ] Export the report as a PDF
+- [x] Export the report as a PDF and as Markdown
 - [ ] Anonymous demo mode, no signup required
 - [ ] Shareable read-only report links
 - [ ] Interview questions generated from the resume
